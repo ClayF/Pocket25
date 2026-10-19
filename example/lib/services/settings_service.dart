@@ -17,7 +17,9 @@ class SettingsService extends ChangeNotifier {
   int _ppm = 0;
   int _sampleRate = 1536000;  // 1.536 MSPS - matches DSD rtl_tcp default
   bool _biasTee = false; // Bias-T enable for RTL-SDR
-  
+  // P25 demodulation: 0 = Auto, 1 = CQPSK / LSM (simulcast), 2 = C4FM
+  int _p25Modulation = 0;
+
   // Native USB state (RTL-SDR)
   int _nativeUsbFd = -1;
   String _nativeUsbPath = '';
@@ -45,6 +47,7 @@ class SettingsService extends ChangeNotifier {
     _gain = prefs.getInt('sdr_gain') ?? _gain;
     _ppm = prefs.getInt('sdr_ppm') ?? _ppm;
     _biasTee = prefs.getBool('sdr_bias_tee') ?? _biasTee;
+    _p25Modulation = prefs.getInt('sdr_p25_modulation') ?? _p25Modulation;
     _hackrfLnaGain = prefs.getInt('sdr_hackrf_lna_gain') ?? _hackrfLnaGain;
     _hackrfVgaGain = prefs.getInt('sdr_hackrf_vga_gain') ?? _hackrfVgaGain;
     
@@ -63,6 +66,7 @@ class SettingsService extends ChangeNotifier {
     await prefs.setInt('sdr_gain', _gain);
     await prefs.setInt('sdr_ppm', _ppm);
     await prefs.setBool('sdr_bias_tee', _biasTee);
+    await prefs.setInt('sdr_p25_modulation', _p25Modulation);
     await prefs.setInt('sdr_hackrf_lna_gain', _hackrfLnaGain);
     await prefs.setInt('sdr_hackrf_vga_gain', _hackrfVgaGain);
     
@@ -80,6 +84,7 @@ class SettingsService extends ChangeNotifier {
   int get ppm => _ppm;
   int get sampleRate => _sampleRate;
   bool get biasTee => _biasTee;
+  int get p25Modulation => _p25Modulation;
   int get nativeUsbFd => _nativeUsbFd;
   String get nativeUsbPath => _nativeUsbPath;
   bool get hasNativeUsbDevice => _nativeUsbFd >= 0;
@@ -138,6 +143,12 @@ class SettingsService extends ChangeNotifier {
 
   void updateBiasTee(bool value) {
     _biasTee = value;
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void updateP25Modulation(int value) {
+    _p25Modulation = (value >= 0 && value <= 2) ? value : 0;
     _saveSettings();
     notifyListeners();
   }

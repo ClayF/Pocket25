@@ -101,6 +101,42 @@ static bool g_audio_muted_by_filter = false; // Track if filter muted audio
 static std::string g_custom_args;
 static std::mutex g_custom_args_mutex;
 
+// P25 demodulation mode selected in the app settings.
+// 0 = Auto (decoder default, C4FM with auto modulation detection)
+// 1 = CQPSK / LSM (simulcast systems) - equivalent to dsd-neo "-mq"
+// 2 = C4FM only - equivalent to dsd-neo "-mc"
+static std::atomic<int> g_p25_modulation{0};
+
+// Apply the selected P25 modulation to opts/state. Must run before the engine
+// starts: the RTL demodulator reads opts->mod_qpsk at stream setup to decide
+// whether to enable its CQPSK (differential QPSK + Costas + TED) path.
+static void apply_p25_modulation() {
+    if (!g_opts || !g_state) {
+        return;
+    }
+    switch (g_p25_modulation.load()) {
+        case 1:  // CQPSK / LSM simulcast
+            g_opts->mod_c4fm = 0;
+            g_opts->mod_qpsk = 1;
+            g_opts->mod_gfsk = 0;
+            g_opts->mod_cli_lock = 1;
+            g_state->rf_mod = 1;
+            LOGI("P25 modulation: CQPSK/LSM (mod_qpsk=1, locked)");
+            break;
+        case 2:  // C4FM only
+            g_opts->mod_c4fm = 1;
+            g_opts->mod_qpsk = 0;
+            g_opts->mod_gfsk = 0;
+            g_opts->mod_cli_lock = 1;
+            g_state->rf_mod = 0;
+            LOGI("P25 modulation: C4FM (locked)");
+            break;
+        default:  // Auto - leave decoder/app defaults untouched
+            LOGI("P25 modulation: Auto (default)");
+            break;
+    }
+}
+
 // Retune freeze - temporarily block auto-retunes during system switch
 static std::atomic<bool> g_retune_freeze{false};
 
@@ -1318,8 +1354,13 @@ Java_com_example_dsd_1flutter_DsdFlutterPlugin_nativeStart(
     }
     
     if (g_opts && g_state) {
+        // Apply the user's P25 modulation choice (CQPSK/LSM for simulcast)
+        apply_p25_modulation();
+
         // Log config before starting
         LOGI("Config: audio_in_dev=%s", g_opts->audio_in_dev);
+        LOGI("Config: mod_c4fm=%d mod_qpsk=%d mod_cli_lock=%d rf_mod=%d",
+             g_opts->mod_c4fm, g_opts->mod_qpsk, g_opts->mod_cli_lock, g_state->rf_mod);
         LOGI("Config: audio_in_type=%d (RTL=%d)", g_opts->audio_in_type, AUDIO_IN_RTL);
         LOGI("Config: audio_in_fd=%d", g_opts->audio_in_fd);
         LOGI("Config: wav_sample_rate=%d", g_opts->wav_sample_rate);
@@ -1643,6 +1684,21 @@ Java_com_example_dsd_1flutter_DsdFlutterPlugin_nativeSetCustomArgs(
     env->ReleaseStringUTFChars(args, args_cstr);
     
     LOGI("Set custom DSD args: %s", g_custom_args.c_str());
+}
+
+/**
+ * Set P25 modulation mode (0 = Auto, 1 = CQPSK/LSM simulcast, 2 = C4FM).
+ * Takes effect the next time the engine starts.
+ */
+extern "C" JNIEXPORT void JNICALL
+Java_com_example_dsd_1flutter_DsdFlutterPlugin_nativeSetP25Modulation(
+    JNIEnv* env,
+    jobject thiz,
+    jint mode) {
+
+    int m = (mode >= 0 && mode <= 2) ? (int)mode : 0;
+    g_p25_modulation.store(m);
+    LOGI("Set P25 modulation mode: %d", m);
 }
 
 // ============================================================================

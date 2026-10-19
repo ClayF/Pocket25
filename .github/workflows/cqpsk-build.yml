@@ -1,0 +1,61 @@
+name: Build APK (CQPSK/LSM mode)
+
+# Builds a release APK from this branch and attaches it to the workflow run.
+# Signed with a throwaway key generated during the build (no secrets needed),
+# so it cannot be installed over the official Play Store / release build:
+# uninstall the official app first.
+
+on:
+  push:
+    branches: [cqpsk-lsm-mode]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.1'
+          channel: 'stable'
+
+      - name: Generate temporary signing key
+        run: |
+          cd example/android
+          keytool -genkeypair -v -keystore app/temp-release-key.jks \
+            -storepass pocket25temp -keypass pocket25temp -alias pocket25 \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Pocket25 CQPSK build"
+          echo "storePassword=pocket25temp" > key.properties
+          echo "keyPassword=pocket25temp" >> key.properties
+          echo "keyAlias=pocket25" >> key.properties
+          echo "storeFile=temp-release-key.jks" >> key.properties
+
+      - name: Install dependencies
+        run: |
+          cd example
+          flutter pub get
+
+      - name: Build APK
+        run: |
+          cd example
+          flutter build apk --release
+          cp build/app/outputs/flutter-apk/app-release.apk \
+             build/app/outputs/flutter-apk/pocket25-cqpsk.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pocket25-cqpsk-apk
+          path: example/build/app/outputs/flutter-apk/pocket25-cqpsk.apk

@@ -344,6 +344,7 @@ class DsdFlutterPlugin :
     private external fun nativeClearFilterTalkgroups()
     private external fun nativeGetFilterMode(): Int
     private external fun nativeSetCustomArgs(args: String)
+    private external fun nativeSetP25Modulation(mode: Int)
     private external fun nativeSetRetuneFrozen(frozen: Boolean)
     private external fun nativeRetune(freqHz: Int): Boolean
     private external fun nativeResetP25State()
@@ -639,6 +640,11 @@ class DsdFlutterPlugin :
             "setCustomArgs" -> {
                 val args = call.argument<String>("args") ?: ""
                 nativeSetCustomArgs(args)
+                result.success(null)
+            }
+            "setP25Modulation" -> {
+                val mode = call.argument<Int>("mode") ?: 0
+                nativeSetP25Modulation(mode)
                 result.success(null)
             }
             "setRetuneFrozen" -> {

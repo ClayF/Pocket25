@@ -317,6 +317,59 @@ class _SdrSettingsScreenState extends State<SdrSettingsScreen> {
               ),
             ),
             const SizedBox(height: 16),
+
+            // P25 Modulation
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'P25 Modulation',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Use CQPSK / LSM for simulcast systems. Takes effect the next time scanning starts.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[400]),
+                    ),
+                    const SizedBox(height: 8),
+                    RadioListTile<int>(
+                      title: const Text('Auto (default)', style: TextStyle(fontSize: 14)),
+                      value: 0,
+                      groupValue: widget.settings.p25Modulation,
+                      onChanged: (value) {
+                        setState(() {
+                          widget.settings.updateP25Modulation(value!);
+                        });
+                      },
+                    ),
+                    RadioListTile<int>(
+                      title: const Text('CQPSK / LSM (simulcast)', style: TextStyle(fontSize: 14)),
+                      value: 1,
+                      groupValue: widget.settings.p25Modulation,
+                      onChanged: (value) {
+                        setState(() {
+                          widget.settings.updateP25Modulation(value!);
+                        });
+                      },
+                    ),
+                    RadioListTile<int>(
+                      title: const Text('C4FM only', style: TextStyle(fontSize: 14)),
+                      value: 2,
+                      groupValue: widget.settings.p25Modulation,
+                      onChanged: (value) {
+                        setState(() {
+                          widget.settings.updateP25Modulation(value!);
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             
             // HackRF-specific settings
             if (widget.settings.rtlSource == RtlSource.hackrf) ...[

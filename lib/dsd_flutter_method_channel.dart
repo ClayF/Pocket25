@@ -212,6 +212,13 @@ class MethodChannelDsdFlutter extends DsdFlutterPlatform {
       'enabled': enabled,
     });
   }
+
+  @override
+  Future<void> setP25Modulation(int mode) async {
+    await methodChannel.invokeMethod('setP25Modulation', {
+      'mode': mode,
+    });
+  }
   
   @override
   Stream<String> get outputStream {

@@ -137,6 +137,11 @@ abstract class DsdFlutterPlatform extends PlatformInterface {
   Future<void> setTrunkFollowing(bool enabled) {
     throw UnimplementedError('setTrunkFollowing() has not been implemented.');
   }
+
+  /// Set P25 demodulation mode (0 = Auto, 1 = CQPSK/LSM, 2 = C4FM)
+  Future<void> setP25Modulation(int mode) {
+    throw UnimplementedError('setP25Modulation() has not been implemented.');
+  }
   
   /// Stream of log output strings from DSD
   Stream<String> get outputStream {

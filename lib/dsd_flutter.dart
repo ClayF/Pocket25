@@ -130,6 +130,12 @@ class DsdFlutter {
   Future<void> setTrunkFollowing(bool enabled) {
     return DsdFlutterPlatform.instance.setTrunkFollowing(enabled);
   }
+
+  /// Set the P25 demodulation mode, applied the next time the engine starts.
+  /// 0 = Auto (default), 1 = CQPSK / LSM (simulcast), 2 = C4FM only
+  Future<void> setP25Modulation(int mode) {
+    return DsdFlutterPlatform.instance.setP25Modulation(mode);
+  }
   
   /// Stream of log output strings from DSD
   Stream<String> get outputStream {

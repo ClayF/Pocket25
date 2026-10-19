@@ -606,7 +606,10 @@ class ScanningService extends ChangeNotifier {
     try {
       // Update frequency in settings
       _settingsService.updateFrequency(_currentFrequency!);
-      
+
+      // Apply P25 modulation choice (CQPSK/LSM for simulcast) before the engine starts
+      await _dsdPlugin.setP25Modulation(_settingsService.p25Modulation);
+
       if (_settingsService.rtlSource == RtlSource.nativeUsb) {
         // Native USB mode - use built-in RTL-SDR support
         if (!_settingsService.hasNativeUsbDevice) {
