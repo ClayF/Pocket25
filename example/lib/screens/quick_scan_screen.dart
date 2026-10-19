@@ -135,7 +135,7 @@ class _QuickScanScreenState extends State<QuickScanScreen> {
             devicePath: result['devicePath'] as String,
             freqHz: widget.settings.frequencyHz,
             sampleRate: widget.settings.sampleRate,
-            gain: widget.settings.gain * 10, // Convert to tenths of dB
+            gain: widget.settings.tunerGainTenthsDb, // tenths of dB, 0 = auto
             ppm: widget.settings.ppm,
           );
           
@@ -171,7 +171,7 @@ class _QuickScanScreenState extends State<QuickScanScreen> {
             widget.settings.remoteHost,
             widget.settings.remotePort,
             widget.settings.frequencyHz,
-            gain: widget.settings.gain,
+            gain: widget.settings.tunerGainTenthsDb, // decoder expects tenths of dB
             ppm: widget.settings.ppm,
             biasTee: widget.settings.biasTee,
           );

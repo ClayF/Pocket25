@@ -19,6 +19,12 @@ class SettingsService extends ChangeNotifier {
   bool _biasTee = false; // Bias-T enable for RTL-SDR
   // P25 demodulation: 0 = Auto, 1 = CQPSK / LSM (simulcast), 2 = C4FM
   int _p25Modulation = 0;
+  // Receive enhancements
+  bool _autoPpm = true;        // spectrum-based PPM drift correction
+  bool _fll = false;           // carrier frequency tracking (C4FM)
+  bool _ted = false;           // symbol timing recovery (C4FM)
+  bool _autoGain = false;      // automatic tuner gain (overrides manual gain)
+  bool _bothSlots = true;      // play both TDMA slots (P25 Phase 2 / DMR)
 
   // Native USB state (RTL-SDR)
   int _nativeUsbFd = -1;
@@ -48,6 +54,11 @@ class SettingsService extends ChangeNotifier {
     _ppm = prefs.getInt('sdr_ppm') ?? _ppm;
     _biasTee = prefs.getBool('sdr_bias_tee') ?? _biasTee;
     _p25Modulation = prefs.getInt('sdr_p25_modulation') ?? _p25Modulation;
+    _autoPpm = prefs.getBool('sdr_auto_ppm') ?? _autoPpm;
+    _fll = prefs.getBool('sdr_fll') ?? _fll;
+    _ted = prefs.getBool('sdr_ted') ?? _ted;
+    _autoGain = prefs.getBool('sdr_auto_gain') ?? _autoGain;
+    _bothSlots = prefs.getBool('sdr_both_slots') ?? _bothSlots;
     _hackrfLnaGain = prefs.getInt('sdr_hackrf_lna_gain') ?? _hackrfLnaGain;
     _hackrfVgaGain = prefs.getInt('sdr_hackrf_vga_gain') ?? _hackrfVgaGain;
     
@@ -67,6 +78,11 @@ class SettingsService extends ChangeNotifier {
     await prefs.setInt('sdr_ppm', _ppm);
     await prefs.setBool('sdr_bias_tee', _biasTee);
     await prefs.setInt('sdr_p25_modulation', _p25Modulation);
+    await prefs.setBool('sdr_auto_ppm', _autoPpm);
+    await prefs.setBool('sdr_fll', _fll);
+    await prefs.setBool('sdr_ted', _ted);
+    await prefs.setBool('sdr_auto_gain', _autoGain);
+    await prefs.setBool('sdr_both_slots', _bothSlots);
     await prefs.setInt('sdr_hackrf_lna_gain', _hackrfLnaGain);
     await prefs.setInt('sdr_hackrf_vga_gain', _hackrfVgaGain);
     
@@ -85,6 +101,15 @@ class SettingsService extends ChangeNotifier {
   int get sampleRate => _sampleRate;
   bool get biasTee => _biasTee;
   int get p25Modulation => _p25Modulation;
+  bool get autoPpm => _autoPpm;
+  bool get fll => _fll;
+  bool get ted => _ted;
+  bool get autoGain => _autoGain;
+  bool get bothSlots => _bothSlots;
+
+  /// Tuner gain to send to the decoder, in tenths of a dB (0 = automatic).
+  /// The decoder expects tenths of a dB for both USB and rtl_tcp sources.
+  int get tunerGainTenthsDb => _autoGain ? 0 : _gain * 10;
   int get nativeUsbFd => _nativeUsbFd;
   String get nativeUsbPath => _nativeUsbPath;
   bool get hasNativeUsbDevice => _nativeUsbFd >= 0;
@@ -149,6 +174,22 @@ class SettingsService extends ChangeNotifier {
 
   void updateP25Modulation(int value) {
     _p25Modulation = (value >= 0 && value <= 2) ? value : 0;
+    _saveSettings();
+    notifyListeners();
+  }
+
+  void updateReceiveOptions({
+    bool? autoPpm,
+    bool? fll,
+    bool? ted,
+    bool? autoGain,
+    bool? bothSlots,
+  }) {
+    if (autoPpm != null) _autoPpm = autoPpm;
+    if (fll != null) _fll = fll;
+    if (ted != null) _ted = ted;
+    if (autoGain != null) _autoGain = autoGain;
+    if (bothSlots != null) _bothSlots = bothSlots;
     _saveSettings();
     notifyListeners();
   }

@@ -142,6 +142,22 @@ abstract class DsdFlutterPlatform extends PlatformInterface {
   Future<void> setP25Modulation(int mode) {
     throw UnimplementedError('setP25Modulation() has not been implemented.');
   }
+
+  /// Arm P25-only trunk mode for the next engine start
+  Future<void> setP25Only(bool enabled) {
+    throw UnimplementedError('setP25Only() has not been implemented.');
+  }
+
+  /// Set receive enhancements (auto PPM, FLL, TED, auto gain, TDMA slots)
+  Future<void> setReceiveOptions({
+    required bool autoPpm,
+    required bool fll,
+    required bool ted,
+    required bool autoGain,
+    required bool bothSlots,
+  }) {
+    throw UnimplementedError('setReceiveOptions() has not been implemented.');
+  }
   
   /// Stream of log output strings from DSD
   Stream<String> get outputStream {

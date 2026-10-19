@@ -397,6 +397,15 @@ class _MainScreenState extends State<MainScreen> {
         _currentCall = null;
       });
 
+      // Push receive enhancements (auto PPM, FLL, TED, auto gain, TDMA slots)
+      // so they take effect for this engine start.
+      await _dsdFlutterPlugin.setReceiveOptions(
+        autoPpm: _settingsService.autoPpm,
+        fll: _settingsService.fll,
+        ted: _settingsService.ted,
+        autoGain: _settingsService.autoGain,
+        bothSlots: _settingsService.bothSlots,
+      );
       await _dsdFlutterPlugin.start();
     } catch (e) {
       setState(() {

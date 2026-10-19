@@ -345,6 +345,14 @@ class DsdFlutterPlugin :
     private external fun nativeGetFilterMode(): Int
     private external fun nativeSetCustomArgs(args: String)
     private external fun nativeSetP25Modulation(mode: Int)
+    private external fun nativeSetP25Only(enabled: Boolean)
+    private external fun nativeSetReceiveOptions(
+        autoPpm: Boolean,
+        fll: Boolean,
+        ted: Boolean,
+        autoGain: Boolean,
+        bothSlots: Boolean
+    )
     private external fun nativeSetRetuneFrozen(frozen: Boolean)
     private external fun nativeRetune(freqHz: Int): Boolean
     private external fun nativeResetP25State()
@@ -645,6 +653,21 @@ class DsdFlutterPlugin :
             "setP25Modulation" -> {
                 val mode = call.argument<Int>("mode") ?: 0
                 nativeSetP25Modulation(mode)
+                result.success(null)
+            }
+            "setP25Only" -> {
+                val enabled = call.argument<Boolean>("enabled") ?: false
+                nativeSetP25Only(enabled)
+                result.success(null)
+            }
+            "setReceiveOptions" -> {
+                nativeSetReceiveOptions(
+                    call.argument<Boolean>("autoPpm") ?: true,
+                    call.argument<Boolean>("fll") ?: false,
+                    call.argument<Boolean>("ted") ?: false,
+                    call.argument<Boolean>("autoGain") ?: false,
+                    call.argument<Boolean>("bothSlots") ?: true
+                )
                 result.success(null)
             }
             "setRetuneFrozen" -> {

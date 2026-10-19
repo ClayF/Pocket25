@@ -219,6 +219,30 @@ class MethodChannelDsdFlutter extends DsdFlutterPlatform {
       'mode': mode,
     });
   }
+
+  @override
+  Future<void> setP25Only(bool enabled) async {
+    await methodChannel.invokeMethod('setP25Only', {
+      'enabled': enabled,
+    });
+  }
+
+  @override
+  Future<void> setReceiveOptions({
+    required bool autoPpm,
+    required bool fll,
+    required bool ted,
+    required bool autoGain,
+    required bool bothSlots,
+  }) async {
+    await methodChannel.invokeMethod('setReceiveOptions', {
+      'autoPpm': autoPpm,
+      'fll': fll,
+      'ted': ted,
+      'autoGain': autoGain,
+      'bothSlots': bothSlots,
+    });
+  }
   
   @override
   Stream<String> get outputStream {

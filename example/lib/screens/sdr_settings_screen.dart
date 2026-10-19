@@ -281,11 +281,14 @@ class _SdrSettingsScreenState extends State<SdrSettingsScreen> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _gainController,
-                      decoration: const InputDecoration(
+                      enabled: !widget.settings.autoGain,
+                      decoration: InputDecoration(
                         labelText: 'Gain',
                         hintText: '30',
-                        border: OutlineInputBorder(),
-                        helperText: 'RTL-SDR gain (0-49)',
+                        border: const OutlineInputBorder(),
+                        helperText: widget.settings.autoGain
+                            ? 'Automatic gain is on (see Receive Enhancements)'
+                            : 'RTL-SDR gain in dB (0-49). Too high can overload near strong sites.',
                       ),
                       keyboardType: TextInputType.number,
                     ),
@@ -362,6 +365,78 @@ class _SdrSettingsScreenState extends State<SdrSettingsScreen> {
                       onChanged: (value) {
                         setState(() {
                           widget.settings.updateP25Modulation(value!);
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Receive enhancements
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Receive Enhancements',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Take effect the next time scanning starts. Watch the BER (last 10 seconds) to compare.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[400]),
+                    ),
+                    SwitchListTile(
+                      title: const Text('Automatic PPM correction'),
+                      subtitle: const Text('Tracks and corrects dongle frequency drift'),
+                      value: widget.settings.autoPpm,
+                      onChanged: (value) {
+                        setState(() {
+                          widget.settings.updateReceiveOptions(autoPpm: value);
+                        });
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Hear both TDMA slots'),
+                      subtitle: const Text('Phase 2 carries two calls per frequency; off = slot 1 only'),
+                      value: widget.settings.bothSlots,
+                      onChanged: (value) {
+                        setState(() {
+                          widget.settings.updateReceiveOptions(bothSlots: value);
+                        });
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Automatic gain'),
+                      subtitle: const Text('Adjusts tuner gain to avoid overload (ignores the Gain value)'),
+                      value: widget.settings.autoGain,
+                      onChanged: (value) {
+                        setState(() {
+                          widget.settings.updateReceiveOptions(autoGain: value);
+                        });
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Frequency tracking (FLL)'),
+                      subtitle: const Text('C4FM: follows residual carrier offset'),
+                      value: widget.settings.fll,
+                      onChanged: (value) {
+                        setState(() {
+                          widget.settings.updateReceiveOptions(fll: value);
+                        });
+                      },
+                    ),
+                    SwitchListTile(
+                      title: const Text('Symbol timing recovery (TED)'),
+                      subtitle: const Text('C4FM: tracks symbol timing; CQPSK always uses it'),
+                      value: widget.settings.ted,
+                      onChanged: (value) {
+                        setState(() {
+                          widget.settings.updateReceiveOptions(ted: value);
                         });
                       },
                     ),

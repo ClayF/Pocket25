@@ -220,7 +220,7 @@ class _ConventionalChannelsScreenState extends State<ConventionalChannelsScreen>
             devicePath: result['devicePath'] as String,
             freqHz: widget.settings.frequencyHz,
             sampleRate: widget.settings.sampleRate,
-            gain: widget.settings.gain * 10,
+            gain: widget.settings.tunerGainTenthsDb,
             ppm: widget.settings.ppm,
           );
           
@@ -256,7 +256,7 @@ class _ConventionalChannelsScreenState extends State<ConventionalChannelsScreen>
             widget.settings.remoteHost,
             widget.settings.remotePort,
             widget.settings.frequencyHz,
-            gain: widget.settings.gain,
+            gain: widget.settings.tunerGainTenthsDb, // decoder expects tenths of dB
             ppm: widget.settings.ppm,
             biasTee: widget.settings.biasTee,
           );

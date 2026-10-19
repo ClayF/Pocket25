@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <unistd.h>
 #include <cstring>
+#include <cstdlib>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -107,11 +108,83 @@ static std::mutex g_custom_args_mutex;
 // 2 = C4FM only - equivalent to dsd-neo "-mc"
 static std::atomic<int> g_p25_modulation{0};
 
+// P25 trunk mode: when set, only P25 Phase 1/2 frame sync is enabled so the
+// decoder does not chase false DMR/D-STAR/YSF/X2-TDMA syncs while following a
+// P25 system. Armed by the trunked scanner before start; cleared on stop so
+// conventional/DMR screens are unaffected.
+static std::atomic<bool> g_p25_only{false};
+
+// Receive enhancements (persist across starts; set from app settings)
+static std::atomic<bool> g_rx_auto_ppm{true};     // spectrum-based PPM drift correction
+static std::atomic<bool> g_rx_fll{false};         // residual carrier offset tracking (C4FM path)
+static std::atomic<bool> g_rx_ted{false};         // Gardner symbol timing recovery (C4FM path)
+static std::atomic<bool> g_rx_auto_gain{false};   // supervisory tuner auto gain (gain = 0)
+static std::atomic<bool> g_rx_both_slots{true};   // play both P25 Phase 2 / DMR TDMA slots
+
+// Apply receive enhancements. dsd-neo reads its DSP knobs from environment
+// variables each time the RTL stream is set up (dsd_neo_config_init), so they
+// are exported here, just before the engine thread starts.
+static void apply_receive_options() {
+    if (!g_opts || !g_state) {
+        return;
+    }
+    const bool auto_ppm = g_rx_auto_ppm.load();
+    const bool fll = g_rx_fll.load();
+    const bool ted = g_rx_ted.load();
+    const bool auto_gain = g_rx_auto_gain.load();
+    const bool both_slots = g_rx_both_slots.load();
+
+    setenv("DSD_NEO_AUTO_PPM", auto_ppm ? "1" : "0", 1);
+    // The RTL loop follows opts->rtl_auto_ppm at runtime, so set it too.
+    g_opts->rtl_auto_ppm = auto_ppm ? 1 : 0;
+
+    setenv("DSD_NEO_FLL", fll ? "1" : "0", 1);
+    setenv("DSD_NEO_TED", ted ? "1" : "0", 1);
+
+    // Supervisory autogain only runs when the tuner gain is 0 (auto).
+    setenv("DSD_NEO_TUNER_AUTOGAIN", auto_gain ? "1" : "0", 1);
+    if (auto_gain) {
+        g_opts->rtl_gain_value = 0;
+    }
+
+    if (both_slots) {
+        g_opts->slot1_on = 1;
+        g_opts->slot2_on = 1;
+        g_opts->slot_preference = 2;  // auto: whichever slot has voice
+    } else {
+        g_opts->slot1_on = 1;
+        g_opts->slot2_on = 0;
+        g_opts->slot_preference = 0;
+    }
+
+    if (g_p25_only.load()) {
+        g_opts->frame_p25p1 = 1;
+        g_opts->frame_p25p2 = 1;
+        g_opts->frame_dmr = 0;
+        g_opts->frame_dstar = 0;
+        g_opts->frame_x2tdma = 0;
+        g_opts->frame_ysf = 0;
+        g_opts->frame_nxdn48 = 0;
+        g_opts->frame_nxdn96 = 0;
+        g_opts->frame_dpmr = 0;
+        g_opts->frame_provoice = 0;
+        g_opts->frame_m17 = 0;
+    }
+
+    LOGI("Receive options: auto_ppm=%d fll=%d ted=%d auto_gain=%d both_slots=%d p25_only=%d",
+         auto_ppm, fll, ted, auto_gain, both_slots, g_p25_only.load() ? 1 : 0);
+}
+
 // Apply the selected P25 modulation to opts/state. Must run before the engine
 // starts: the RTL demodulator reads opts->mod_qpsk at stream setup to decide
 // whether to enable its CQPSK (differential QPSK + Costas + TED) path.
 static void apply_p25_modulation() {
     if (!g_opts || !g_state) {
+        return;
+    }
+    // Only applies to P25 trunked scanning; other modes (DMR, conventional)
+    // keep the decoder's own modulation handling.
+    if (!g_p25_only.load()) {
         return;
     }
     switch (g_p25_modulation.load()) {
@@ -1354,7 +1427,9 @@ Java_com_example_dsd_1flutter_DsdFlutterPlugin_nativeStart(
     }
     
     if (g_opts && g_state) {
-        // Apply the user's P25 modulation choice (CQPSK/LSM for simulcast)
+        // Apply receive enhancements and the user's P25 modulation choice
+        // (CQPSK/LSM for simulcast). Order matters: modulation last.
+        apply_receive_options();
         apply_p25_modulation();
 
         // Log config before starting
@@ -1413,7 +1488,11 @@ Java_com_example_dsd_1flutter_DsdFlutterPlugin_nativeStop(
     std::lock_guard<std::mutex> lifecycle_lock(g_engine_lifecycle_mutex);
     
     LOGI("Stopping DSD engine");
-    
+
+    // Disarm P25 trunk mode so the next start (e.g. conventional/DMR) uses
+    // full multi-protocol sync unless the trunked scanner arms it again.
+    g_p25_only.store(false);
+
     if (!g_engine_running.load()) {
         LOGI("Engine not running");
         return;
@@ -1699,6 +1778,42 @@ Java_com_example_dsd_1flutter_DsdFlutterPlugin_nativeSetP25Modulation(
     int m = (mode >= 0 && mode <= 2) ? (int)mode : 0;
     g_p25_modulation.store(m);
     LOGI("Set P25 modulation mode: %d", m);
+}
+
+/**
+ * Arm/disarm P25-only trunk mode for the next engine start.
+ * Cleared automatically when the engine stops.
+ */
+extern "C" JNIEXPORT void JNICALL
+Java_com_example_dsd_1flutter_DsdFlutterPlugin_nativeSetP25Only(
+    JNIEnv* env,
+    jobject thiz,
+    jboolean enabled) {
+
+    g_p25_only.store(enabled ? true : false);
+    LOGI("Set P25-only trunk mode: %d", enabled ? 1 : 0);
+}
+
+/**
+ * Set receive enhancements. Applied the next time the engine starts.
+ */
+extern "C" JNIEXPORT void JNICALL
+Java_com_example_dsd_1flutter_DsdFlutterPlugin_nativeSetReceiveOptions(
+    JNIEnv* env,
+    jobject thiz,
+    jboolean autoPpm,
+    jboolean fll,
+    jboolean ted,
+    jboolean autoGain,
+    jboolean bothSlots) {
+
+    g_rx_auto_ppm.store(autoPpm ? true : false);
+    g_rx_fll.store(fll ? true : false);
+    g_rx_ted.store(ted ? true : false);
+    g_rx_auto_gain.store(autoGain ? true : false);
+    g_rx_both_slots.store(bothSlots ? true : false);
+    LOGI("Set receive options: auto_ppm=%d fll=%d ted=%d auto_gain=%d both_slots=%d",
+         autoPpm ? 1 : 0, fll ? 1 : 0, ted ? 1 : 0, autoGain ? 1 : 0, bothSlots ? 1 : 0);
 }
 
 // ============================================================================

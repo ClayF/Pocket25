@@ -136,6 +136,29 @@ class DsdFlutter {
   Future<void> setP25Modulation(int mode) {
     return DsdFlutterPlatform.instance.setP25Modulation(mode);
   }
+
+  /// Arm P25-only trunk mode (P25 sync only; applies the P25 modulation
+  /// setting) for the next engine start. Cleared when the engine stops.
+  Future<void> setP25Only(bool enabled) {
+    return DsdFlutterPlatform.instance.setP25Only(enabled);
+  }
+
+  /// Set receive enhancements, applied the next time the engine starts.
+  Future<void> setReceiveOptions({
+    required bool autoPpm,
+    required bool fll,
+    required bool ted,
+    required bool autoGain,
+    required bool bothSlots,
+  }) {
+    return DsdFlutterPlatform.instance.setReceiveOptions(
+      autoPpm: autoPpm,
+      fll: fll,
+      ted: ted,
+      autoGain: autoGain,
+      bothSlots: bothSlots,
+    );
+  }
   
   /// Stream of log output strings from DSD
   Stream<String> get outputStream {

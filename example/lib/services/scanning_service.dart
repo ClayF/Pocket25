@@ -171,12 +171,56 @@ class ScanningService extends ChangeNotifier {
   int get parityMismatches => _parityMismatches;
   DateTime? get lastTsbkTime => _lastTsbkTime;
   
-  // Calculate BER (Bit Error Rate) as a percentage
+  // Calculate BER (Bit Error Rate) as a percentage over a recent window
+  // (last [_berWindow]) so it reflects current reception and responds
+  // quickly to gain/PPM/modulation changes, instead of a running total.
   // Note: Only works for P25 - DMR doesn't expose FEC counters, will show 0%
   double get ber {
-    final total = _tsbkCount + _tsbkErrors;
+    _pruneBerWindow(DateTime.now());
+    int ok = 0;
+    int err = 0;
+    for (final s in _berSamples) {
+      ok += s.ok;
+      err += s.err;
+    }
+    final total = ok + err;
     if (total == 0) return 0.0;
-    return (_tsbkErrors / total) * 100.0;
+    return (err / total) * 100.0;
+  }
+
+  // Recent-window BER tracking
+  static const Duration _berWindow = Duration(seconds: 10);
+  final List<_BerSample> _berSamples = [];
+  int _lastRawOk = -1;
+  int _lastRawErr = -1;
+
+  void _pruneBerWindow(DateTime now) {
+    final cutoff = now.subtract(_berWindow);
+    while (_berSamples.isNotEmpty && _berSamples.first.time.isBefore(cutoff)) {
+      _berSamples.removeAt(0);
+    }
+  }
+
+  /// Record raw cumulative OK/error counters from the decoder as deltas.
+  /// Counter resets (e.g. after a retune) are detected and not counted.
+  void _recordBerCounters(int rawOk, int rawErr) {
+    final now = DateTime.now();
+    if (_lastRawOk >= 0 && _lastRawErr >= 0 && rawOk >= _lastRawOk && rawErr >= _lastRawErr) {
+      final dOk = rawOk - _lastRawOk;
+      final dErr = rawErr - _lastRawErr;
+      if (dOk > 0 || dErr > 0) {
+        _berSamples.add(_BerSample(now, dOk, dErr));
+      }
+    }
+    _lastRawOk = rawOk;
+    _lastRawErr = rawErr;
+    _pruneBerWindow(now);
+  }
+
+  void _resetBerWindow() {
+    _berSamples.clear();
+    _lastRawOk = -1;
+    _lastRawErr = -1;
   }
   List<int> get neighborFreqs => _neighborFreqs;
   List<int> get neighborLastSeen => _neighborLastSeen;
@@ -266,6 +310,7 @@ class ScanningService extends ChangeNotifier {
       
       // Update counters (only meaningful for P25)
       if (isP25) {
+        _recordBerCounters(tsbkOk, tsbkErr);
         if (tsbkOk > _tsbkCount) {
           _tsbkCount = tsbkOk;
           _lastTsbkTime = DateTime.now();
@@ -504,7 +549,9 @@ class ScanningService extends ChangeNotifier {
       
       // Reset signal quality tracking
       _tsbkCount = 0;
+      _tsbkErrors = 0;
       _parityMismatches = 0;
+      _resetBerWindow();
       _lastTsbkTime = null;
       
       // Reset channel quality tracking for fresh start
@@ -577,6 +624,15 @@ class ScanningService extends ChangeNotifier {
     }
   }
 
+  /// P25 trunked scanning: enable P25-only sync (no false DMR/D-STAR/YSF
+  /// syncs) and apply the modulation choice (CQPSK/LSM for simulcast).
+  /// Must be called right before each engine start; the native side clears
+  /// it whenever the engine stops so other screens are unaffected.
+  Future<void> _armP25Trunk() async {
+    await _dsdPlugin.setP25Modulation(_settingsService.p25Modulation);
+    await _dsdPlugin.setP25Only(true);
+  }
+
   Future<void> _tryNextControlChannel({bool freezeRetunes = false}) async {
     if (_currentChannelIndex >= _controlChannels.length) {
       // Tried all channels, restart from beginning
@@ -607,8 +663,6 @@ class ScanningService extends ChangeNotifier {
       // Update frequency in settings
       _settingsService.updateFrequency(_currentFrequency!);
 
-      // Apply P25 modulation choice (CQPSK/LSM for simulcast) before the engine starts
-      await _dsdPlugin.setP25Modulation(_settingsService.p25Modulation);
 
       if (_settingsService.rtlSource == RtlSource.nativeUsb) {
         // Native USB mode - use built-in RTL-SDR support
@@ -639,7 +693,7 @@ class ScanningService extends ChangeNotifier {
             devicePath: result['devicePath'] as String,
             freqHz: _settingsService.frequencyHz,
             sampleRate: _settingsService.sampleRate,
-            gain: _settingsService.gain * 10, // Convert to tenths of dB
+            gain: _settingsService.tunerGainTenthsDb, // tenths of dB, 0 = auto
             ppm: _settingsService.ppm,
             biasTee: _settingsService.biasTee,
           );
@@ -664,6 +718,7 @@ class ScanningService extends ChangeNotifier {
           }
           
           // Start the engine
+          await _armP25Trunk();
           _onStart();
         } else {
           // Device already open - need to stop engine, let it clean up USB, then restart with new frequency
@@ -709,7 +764,7 @@ class ScanningService extends ChangeNotifier {
             devicePath: result['devicePath'] as String,
             freqHz: _settingsService.frequencyHz,
             sampleRate: _settingsService.sampleRate,
-            gain: _settingsService.gain * 10,
+            gain: _settingsService.tunerGainTenthsDb,
             ppm: _settingsService.ppm,
             biasTee: _settingsService.biasTee,
           );
@@ -722,6 +777,7 @@ class ScanningService extends ChangeNotifier {
           await _dsdPlugin.setTrunkFollowing(true);
           
           // Start engine with new configuration
+          await _armP25Trunk();
           _onStart();
           
           // Mark that we need to unfreeze when first sync arrives
@@ -777,6 +833,7 @@ class ScanningService extends ChangeNotifier {
           await _dsdPlugin.setTrunkFollowing(true);
           
           // Start the DSD engine
+          await _armP25Trunk();
           _onStart();
         } else {
           // Device already open - retune to new frequency
@@ -811,7 +868,7 @@ class ScanningService extends ChangeNotifier {
             _settingsService.effectiveHost,
             _settingsService.effectivePort,
             _settingsService.frequencyHz,
-            gain: _settingsService.gain,
+            gain: _settingsService.tunerGainTenthsDb, // decoder expects tenths of dB
             ppm: _settingsService.ppm,
             biasTee: _settingsService.biasTee,
           );
@@ -830,6 +887,7 @@ class ScanningService extends ChangeNotifier {
           _rtlTcpReconnectTime = DateTime.now();
           
           // Start DSD
+          await _armP25Trunk();
           _onStart();
           
           // Wait for rtl_tcp connection to be established
@@ -1230,4 +1288,12 @@ class ScanningService extends ChangeNotifier {
     _positionSubscription?.cancel();
     super.dispose();
   }
+}
+
+/// One BER sample: TSBK/FEC OK and error counts seen at [time].
+class _BerSample {
+  final DateTime time;
+  final int ok;
+  final int err;
+  _BerSample(this.time, this.ok, this.err);
 }
